@@ -1,7 +1,8 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-
+from sklearn.utils import shuffle
+from sklearn import svm
 
 class NaiveInt:
     """Classifier using the naive integration method.
@@ -162,13 +163,13 @@ class NaiveInt:
 
 
     def score(self, traj, labels):
+        numTotalTraj = traj.shape[1]
+        numTimeBins = traj.shape[2]
+
         num_gg_exc = 0 # num of samples that are predicted 'gg' but are actually exc
         num_exc_gg = 0  # num of samples that are predicted 'exc' but are actually gg
         num_exc = 0 # total num of true exc sample
         num_gg = 0  # total num of true exc sample
-
-        numTotalTraj = traj.shape[1]
-        numTimeBins = traj.shape[2]
 
         #: get intTraj_rotated
         ###
@@ -209,6 +210,108 @@ class NaiveInt:
         print 'needs implementation'
 
 
+class SWInt_DiffAvgTraj:
+    """Classifier using the slot weights method. Calculates slot weights using the difference of average trajectories."""
 
+
+class SWInt_SVM:
+    def __init__(self): #if  want polynomial or rbf kernel, input as param in here
+        self.clf_SVM = svm.LinearSVC(C=0)
+        self.slotSize = 0
+
+    def fit(self, traj, labels, slotSize=50):
+        numTotalTraj = traj.shape[1]
+        numTimeBins = traj.shape[2]  # 5000 #num time bins per traj
+        self.slotSize = slotSize
+
+
+        numSlots = numTimeBins / self.slotSize  # num slots per traj
+        traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
+        for trajIndex in np.arange(numTotalTraj):
+            for j in np.arange(numSlots): #j is slotIndex
+                traj_slotted[0, trajIndex, j] = traj[0, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
+                traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
+
+        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :])) #sample vectors to input into the SVM;
+        labels_ggexc = [0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ] # this groups gg as label 0, and exc as label 1
+
+
+        #@@@ continue debugging here
+        print 'inputvector length', inputVectors.shape
+        print 'labels length', labels_ggexc.shape
+        inputVectors_shuffled, labels_ggexc_shuffled = shuffle(inputVectors, labels_ggexc, random_state=0)
+
+        self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
+
+
+
+        #: find train fidelity
+        ###
+
+        labels_ggexc_predicted = self.clf_SVM.predict(inputVectors)
+
+        num_gg_exc = 0  # num of samples that are predicted 'gg' but are actually exc
+        num_exc_gg = 0  # num of samples that are predicted 'exc' but are actually gg
+        num_exc = 0  # total num of true exc sample
+        num_gg = 0  # total num of true exc sample
+
+        for i in np.arange(numTotalTraj):
+            if labels_ggexc[i] == 1:
+                num_exc = num_exc + 1
+                if labels_ggexc_predicted[i] == 0:
+                    num_gg_exc = num_gg_exc + 1
+            else:
+                num_gg = num_gg + 1
+                if labels_ggexc_predicted[i] == 1:
+                    num_exc_gg = num_exc_gg + 1
+
+        prob_gg_exc = 1.0 * num_gg_exc / num_exc
+        prob_exc_gg = 1.0 * num_exc_gg / num_gg
+
+        fid_ggexc = 1 - (prob_gg_exc + prob_exc_gg) / 2
+
+        print 'train fid_ggexc: ', fid_ggexc
+
+
+    def score(self, traj, labels):
+        numTotalTraj = traj.shape[1]
+        numTimeBins = traj.shape[2]  # 5000 #num time bins per traj
+
+
+        numSlots = numTimeBins / self.slotSize  # num slots per traj
+        traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
+        for trajIndex in np.arange(numTotalTraj):
+            for j in np.arange(numSlots):  # j is slotIndex
+                traj_slotted[0, trajIndex, j] = traj[0, trajIndex, j * self.slotSize:j * self.slotSize + self.slotSize].mean()
+                traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j * self.slotSize:j * self.slotSize + self.slotSize].mean()
+
+        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :])) #sample vectors to input into the SVM;
+        labels_ggexc = [0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj)] # this groups gg as label 0, and exc as label 1
+
+
+
+        labels_ggexc_predicted = self.clf_SVM.predict(inputVectors)
+
+        num_gg_exc = 0  # num of samples that are predicted 'gg' but are actually exc
+        num_exc_gg = 0  # num of samples that are predicted 'exc' but are actually gg
+        num_exc = 0  # total num of true exc sample
+        num_gg = 0  # total num of true exc sample
+
+        for i in np.arange(numTotalTraj):
+            if labels_ggexc[i] == 1:
+                num_exc = num_exc + 1
+                if labels_ggexc_predicted[i] == 0:
+                    num_gg_exc = num_gg_exc + 1
+            else:
+                num_gg = num_gg + 1
+                if labels_ggexc_predicted[i] == 1:
+                    num_exc_gg = num_exc_gg + 1
+
+        prob_gg_exc = 1.0 * num_gg_exc / num_exc
+        prob_exc_gg = 1.0 * num_exc_gg / num_gg
+
+        fid_ggexc = 1 - (prob_gg_exc + prob_exc_gg) / 2
+
+        return fid_ggexc
 
 
