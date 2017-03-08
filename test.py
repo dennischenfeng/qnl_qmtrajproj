@@ -69,16 +69,17 @@ import h5py
 
 traj_train = np.load('traj_train.npy')
 labels_train = np.load('labels_train.npy')
-print 'traj and labels loaded'
+print 'train traj and labels loaded'
 
-# traj_test = np.load('traj_test.npy')
-# labels_test = np.load('labels_test.npy')
-# print 'traj and labels loaded'
+traj_test = np.load('traj_test.npy')
+labels_test = np.load('labels_test.npy')
+print 'test traj and labels loaded'
 
 
-# clf = NaiveInt()
-# clf.fit(traj_train, labels_train, doRotate=True, suppressPlots=False)
-# print 'test fid:', clf.score(traj_test, labels_test)
+clf = NaiveInt()
+clf.fit(traj_train, labels_train, doRotate=True, suppressPlots=False)
+print 'test fid:', clf.score(traj_test, labels_test)
 
-clf = SWInt_SVM()
-clf.fit(traj_train, labels_train)
+# clf = SWInt_SVM()
+# clf.fit(traj_train, labels_train)
+# print 'test fid: ', clf.score(traj_test, labels_test)

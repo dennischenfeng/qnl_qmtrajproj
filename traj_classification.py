@@ -216,7 +216,7 @@ class SWInt_DiffAvgTraj:
 
 class SWInt_SVM:
     def __init__(self): #if  want polynomial or rbf kernel, input as param in here
-        self.clf_SVM = svm.LinearSVC(C=0)
+        self.clf_SVM = svm.LinearSVC(C=1.0)
         self.slotSize = 0
 
     def fit(self, traj, labels, slotSize=50):
@@ -225,6 +225,8 @@ class SWInt_SVM:
         self.slotSize = slotSize
 
 
+        #: get inputVectors and labels_ggexc
+        ###
         numSlots = numTimeBins / self.slotSize  # num slots per traj
         traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
         for trajIndex in np.arange(numTotalTraj):
@@ -232,22 +234,20 @@ class SWInt_SVM:
                 traj_slotted[0, trajIndex, j] = traj[0, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
                 traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
 
-        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :])) #sample vectors to input into the SVM;
-        labels_ggexc = [0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ] # this groups gg as label 0, and exc as label 1
+        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
+        labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ]) # this groups gg as label 0, and exc as label 1
 
 
-        #@@@ continue debugging here
-        print 'inputvector length', inputVectors.shape
-        print 'labels length', labels_ggexc.shape
+
+        #: fit the clf_SVM
+        ###
         inputVectors_shuffled, labels_ggexc_shuffled = shuffle(inputVectors, labels_ggexc, random_state=0)
-
         self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
 
 
 
         #: find train fidelity
         ###
-
         labels_ggexc_predicted = self.clf_SVM.predict(inputVectors)
 
         num_gg_exc = 0  # num of samples that are predicted 'gg' but are actually exc
@@ -278,6 +278,8 @@ class SWInt_SVM:
         numTimeBins = traj.shape[2]  # 5000 #num time bins per traj
 
 
+        #: get inputVectors and labels_ggexc
+        ###
         numSlots = numTimeBins / self.slotSize  # num slots per traj
         traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
         for trajIndex in np.arange(numTotalTraj):
@@ -285,11 +287,13 @@ class SWInt_SVM:
                 traj_slotted[0, trajIndex, j] = traj[0, trajIndex, j * self.slotSize:j * self.slotSize + self.slotSize].mean()
                 traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j * self.slotSize:j * self.slotSize + self.slotSize].mean()
 
-        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :])) #sample vectors to input into the SVM;
+        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
         labels_ggexc = [0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj)] # this groups gg as label 0, and exc as label 1
 
 
 
+        #: find fidelity
+        ###
         labels_ggexc_predicted = self.clf_SVM.predict(inputVectors)
 
         num_gg_exc = 0  # num of samples that are predicted 'gg' but are actually exc
