@@ -78,10 +78,11 @@ labels_test = np.load('labels_test.npy')
 print 'test traj and labels loaded'
 
 
-clf = NaiveInt()
-clf.fit(traj_train, labels_train, doRotate=True, suppressPlots=False)
-print 'test fid:', clf.score(traj_test, labels_test)
+# clf = NaiveInt()
+# clf.fit(traj_train, labels_train, doRotate=True, suppressPlots=False)
+# print 'test fid:', clf.score(traj_test, labels_test)
 
 clf = SWInt_SVM()
 clf.fit(traj_train, labels_train)
 print 'test fid: ', clf.score(traj_test, labels_test)
+print 'predicted labels for test set', clf.predict(traj_test)

@@ -337,7 +337,7 @@ class SWInt_SVM:
         inputVectors_shuffled, labels_ggexc_shuffled = shuffle(inputVectors, labels_ggexc, random_state=0)
 
         if tuneC == False:
-            self.clf_SVM = svm.LinearSVC(C=C)
+            self.clf_SVM = svm.LinearSVC(C=3.3e-10)
             self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
         else:
             print 'Tuning C...'
@@ -371,6 +371,8 @@ class SWInt_SVM:
 
         plt.show()
 
+        return self
+
 
     def score(self, traj, labels):
         """
@@ -381,10 +383,24 @@ class SWInt_SVM:
         :return: fidelity
         """
 
-        inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels)
 
+        inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels)
         fid_ggexc = self.__findFidelity(inputVectors, labels_ggexc)
 
         return fid_ggexc
 
+    def predict(self, traj):
+        """
+        Uses the SVM to predict the labels of the input demodded trajectories.
+
+        :param traj:
+        :return: 1D np array of the predicted labels
+        """
+        numTotalTraj = traj.shape[1]
+
+        inputVectors, _ = self.__formatIntoFeatureVectorsAndLabels(traj, np.zeros(numTotalTraj)) #puts in a fake labels set (because we don't care about the labels)
+
+        labels_ggexc_predicted = self.clf_SVM.predict(inputVectors)
+
+        return labels_ggexc_predicted
 
