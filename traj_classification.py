@@ -5,9 +5,11 @@ from sklearn.utils import shuffle
 from sklearn import svm
 
 class NaiveInt:
-    """Classifier using the naive integration method.
+    """
+    Classifier using the naive integration method.
     Assumes 4 labels only: gg, ge, eg, ee.
-    Assumes all trajectories have same number of time bins."""
+    Assumes all trajectories have same number of time bins.
+    """
 
     def __init__(self):
         self.traj = None #the demodded traj that is input into the fit(.) method; indices: iqIndex, trajIndex, timeIndex
@@ -28,8 +30,20 @@ class NaiveInt:
 
 
     def fit(self, traj, labels, suppressPlots=False, doRotate=True, numBins=70):
-        """Fits the NaiveInt classifier given demodded traj's and their corresponding labels. These compose the training set.
-        Also can plot some graphs to let the user ensure the fit fitted correctly."""
+        """
+        Fits the NaiveInt classifier given demodded traj's and their corresponding labels. These compose the training set.
+        Also can plot some graphs to let the user ensure the fit fitted correctly.
+
+        Params:
+        traj - the demodded trajectories in an np array, with 3 indices: iqIndex, trajIndex, timeIndex
+        labels - the labels corresponding to the trajectories, 1d np array
+        suppressPlots - False if you want the plots to display (displaying the plot pauses the program)
+        doRotate - True if you want this method to rotate the data in IQ space so that all the info is in the I quadrature
+        numBins - number of bins (in both the I and Q directions) of the histograms
+
+        Returns:
+        self
+        """
 
         #: Integrate the I,Q trajs --> intTraj
         ###
@@ -163,6 +177,17 @@ class NaiveInt:
 
 
     def score(self, traj, labels):
+        """
+        Calculates fidelity on the given labelled test set.
+
+        Params:
+        traj - the demodded trajectories in an np array, with 3 indices: iqIndex, trajIndex, timeIndex
+        labels - the labels corresponding to the trajectories, 1d np array
+
+        Returns:
+        fidelity
+        """
+
         numTotalTraj = traj.shape[1]
         numTimeBins = traj.shape[2]
 
@@ -211,19 +236,33 @@ class NaiveInt:
 
 
 class SWInt_DiffAvgTraj:
-    """Classifier using the slot weights method. Calculates slot weights using the difference of average trajectories."""
+    """
+    Classifier using the slot weights method. Calculates slot weights using the difference of average trajectories.
+    Assumes 4 labels only: gg, ge, eg, ee.
+    Assumes all trajectories have same number of time bins.
+    """
 
 
 class SWInt_SVM:
-    def __init__(self): #if  want polynomial or rbf kernel, input as param in here
-        self.clf_SVM = svm.LinearSVC(C=1.0)
+    """
+    Classifier using the slot weights method. Calculates (hopefully optimal) slot weights using an SVM. Includes option to tune the hyperparameter C for the linear SVM.
+    Assumes 4 labels only: gg, ge, eg, ee.
+    Assumes all trajectories have same number of time bins.
+    """
+
+    def __init__(self): # TODO: if  want polynomial or rbf kernel, input as param in here
+        self.clf_SVM = None #svm.LinearSVC(C=C)
         self.slotSize = 0
 
-    def fit(self, traj, labels, slotSize=50):
+    def __formatIntoFeatureVectorsAndLabels(self, traj, labels):
+        """
+        Helper function. Converts the traj and labels into a feature vector matrix (design matrix) and a labels array, which is the proper format to input into the SVM.
+        :param traj: the demodded trajectories in an np array, with 3 indices: iqIndex, trajIndex, timeIndex
+        :param labels: the labels corresponding to the trajectories, 1d np array
+        :return: inputVectors (each feature vector is the I vector concatted with the Q vector) and labels_ggexc (labels for each trajectory, 0 for gg, 1 for exc)
+        """
         numTotalTraj = traj.shape[1]
         numTimeBins = traj.shape[2]  # 5000 #num time bins per traj
-        self.slotSize = slotSize
-
 
         #: get inputVectors and labels_ggexc
         ###
@@ -237,14 +276,17 @@ class SWInt_SVM:
         inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
         labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ]) # this groups gg as label 0, and exc as label 1
 
+        return inputVectors, labels_ggexc
 
 
-        #: fit the clf_SVM
-        ###
-        inputVectors_shuffled, labels_ggexc_shuffled = shuffle(inputVectors, labels_ggexc, random_state=0)
-        self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
-
-
+    def __findFidelity(self, inputVectors, labels_ggexc):
+        """
+        Helper function. Calculates the fidelity
+        :param inputVectors:
+        :param labels_ggexc:
+        :return: fidelity
+        """
+        numTraj = inputVectors.shape[0]
 
         #: find train fidelity
         ###
@@ -255,7 +297,7 @@ class SWInt_SVM:
         num_exc = 0  # total num of true exc sample
         num_gg = 0  # total num of true exc sample
 
-        for i in np.arange(numTotalTraj):
+        for i in np.arange(numTraj):
             if labels_ggexc[i] == 1:
                 num_exc = num_exc + 1
                 if labels_ggexc_predicted[i] == 0:
@@ -269,52 +311,79 @@ class SWInt_SVM:
         prob_exc_gg = 1.0 * num_exc_gg / num_gg
 
         fid_ggexc = 1 - (prob_gg_exc + prob_exc_gg) / 2
+
+        return fid_ggexc
+
+
+    def fit(self, traj, labels, slotSize=50, tuneC=True, lstC=None, validationFraction=0.25):
+        """
+        Fits the SVM.
+
+        :param traj:
+        :param labels:
+        :param slotSize: size (number of time units) of each slot, for performing slot weights integration
+        :param tuneC: True if you want the method to tune C
+        :param lstC: None if you want to use the default list of C's to sweep through for finding the optimal C; should be an np array or a list.
+        :param validationFraction: fraction of the traj's to use as the validation set (tuning C happens on the validation set)
+        :return: self
+        """
+        numTotalTraj = traj.shape[1]
+        self.slotSize = slotSize
+
+        inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels)
+
+        #: fit the clf_SVM, tune C if chosen to
+        ###
+        inputVectors_shuffled, labels_ggexc_shuffled = shuffle(inputVectors, labels_ggexc, random_state=0)
+
+        if tuneC == False:
+            self.clf_SVM = svm.LinearSVC(C=C)
+            self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
+        else:
+            print 'Tuning C...'
+            lstFid = []
+            startIndex_validation = int(numTotalTraj * (1 - validationFraction))
+            if lstC is None:
+                lstC = 10 ** np.linspace(-15, -7, 30)
+            for C in lstC:
+                self.clf_SVM = svm.LinearSVC(C=C)
+                self.clf_SVM.fit(inputVectors_shuffled[0:startIndex_validation], labels_ggexc_shuffled[0:startIndex_validation])
+                temp_fid = self.__findFidelity(inputVectors_shuffled[startIndex_validation: ], labels_ggexc_shuffled[startIndex_validation: ])
+                print 'On C =', C, '; fid =', temp_fid
+                lstFid = lstFid + [temp_fid]
+
+            plt.figure()
+            plt.plot(lstC, lstFid)
+            plt.gca().set_xscale('log')
+            plt.title('Tuning C')
+            plt.xlabel('C')
+            plt.ylabel('Fidelity')
+
+            optimalC = lstC[np.argmax(lstFid)]
+            print 'Chose optimal C = ', optimalC
+
+            self.clf_SVM = svm.LinearSVC(C=optimalC)
+            self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
+
+        fid_ggexc = self.__findFidelity(inputVectors_shuffled, labels_ggexc_shuffled)
 
         print 'train fid_ggexc: ', fid_ggexc
 
+        plt.show()
+
 
     def score(self, traj, labels):
-        numTotalTraj = traj.shape[1]
-        numTimeBins = traj.shape[2]  # 5000 #num time bins per traj
+        """
+        Calculates the fidelity.
 
+        :param traj:
+        :param labels:
+        :return: fidelity
+        """
 
-        #: get inputVectors and labels_ggexc
-        ###
-        numSlots = numTimeBins / self.slotSize  # num slots per traj
-        traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
-        for trajIndex in np.arange(numTotalTraj):
-            for j in np.arange(numSlots):  # j is slotIndex
-                traj_slotted[0, trajIndex, j] = traj[0, trajIndex, j * self.slotSize:j * self.slotSize + self.slotSize].mean()
-                traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j * self.slotSize:j * self.slotSize + self.slotSize].mean()
+        inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels)
 
-        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
-        labels_ggexc = [0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj)] # this groups gg as label 0, and exc as label 1
-
-
-
-        #: find fidelity
-        ###
-        labels_ggexc_predicted = self.clf_SVM.predict(inputVectors)
-
-        num_gg_exc = 0  # num of samples that are predicted 'gg' but are actually exc
-        num_exc_gg = 0  # num of samples that are predicted 'exc' but are actually gg
-        num_exc = 0  # total num of true exc sample
-        num_gg = 0  # total num of true exc sample
-
-        for i in np.arange(numTotalTraj):
-            if labels_ggexc[i] == 1:
-                num_exc = num_exc + 1
-                if labels_ggexc_predicted[i] == 0:
-                    num_gg_exc = num_gg_exc + 1
-            else:
-                num_gg = num_gg + 1
-                if labels_ggexc_predicted[i] == 1:
-                    num_exc_gg = num_exc_gg + 1
-
-        prob_gg_exc = 1.0 * num_gg_exc / num_exc
-        prob_exc_gg = 1.0 * num_exc_gg / num_gg
-
-        fid_ggexc = 1 - (prob_gg_exc + prob_exc_gg) / 2
+        fid_ggexc = self.__findFidelity(inputVectors, labels_ggexc)
 
         return fid_ggexc
 

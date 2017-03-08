@@ -48,6 +48,8 @@ import h5py
 
 
 
+
+
 # traj_demod = np.load('traj_demod.npy')
 # print 'data loaded'
 #
@@ -80,6 +82,6 @@ clf = NaiveInt()
 clf.fit(traj_train, labels_train, doRotate=True, suppressPlots=False)
 print 'test fid:', clf.score(traj_test, labels_test)
 
-# clf = SWInt_SVM()
-# clf.fit(traj_train, labels_train)
-# print 'test fid: ', clf.score(traj_test, labels_test)
+clf = SWInt_SVM()
+clf.fit(traj_train, labels_train)
+print 'test fid: ', clf.score(traj_test, labels_test)
