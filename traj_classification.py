@@ -270,8 +270,8 @@ class SWInt_SVM:
         traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
         for trajIndex in np.arange(numTotalTraj):
             for j in np.arange(numSlots): #j is slotIndex
-                traj_slotted[0, trajIndex, j] = traj[0, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
-                traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
+                traj_slotted[:, trajIndex, j] = traj[:, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean(1)
+                # traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
 
         inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
         labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ]) # this groups gg as label 0, and exc as label 1
