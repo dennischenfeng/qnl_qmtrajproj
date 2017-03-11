@@ -267,11 +267,15 @@ class SWInt_SVM:
         #: get inputVectors and labels_ggexc
         ###
         numSlots = numTimeBins / self.slotSize  # num slots per traj
-        traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
-        for trajIndex in np.arange(numTotalTraj):
-            for j in np.arange(numSlots): #j is slotIndex
-                traj_slotted[:, trajIndex, j] = traj[:, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean(1)
-                # traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
+
+        #: obsolete code because it's too slow
+        # traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
+        # for trajIndex in np.arange(numTotalTraj):
+        #     for j in np.arange(numSlots): #j is slotIndex
+        #         traj_slotted[:, trajIndex, j] = traj[:, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean(1)
+        #         # traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
+
+        traj_slotted = np.reshape(traj, (2, numTotalTraj, numSlots, self.slotSize)).mean(3)
 
         inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
         labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ]) # this groups gg as label 0, and exc as label 1
@@ -286,7 +290,7 @@ class SWInt_SVM:
         :param labels_ggexc:
         :return: fidelity
         """
-        numTraj = inputVectors.shape[0]
+        numTotalTraj = inputVectors.shape[0]
 
         #: find train fidelity
         ###
@@ -297,7 +301,7 @@ class SWInt_SVM:
         num_exc = 0  # total num of true exc sample
         num_gg = 0  # total num of true exc sample
 
-        for i in np.arange(numTraj):
+        for i in np.arange(numTotalTraj):
             if labels_ggexc[i] == 1:
                 num_exc = num_exc + 1
                 if labels_ggexc_predicted[i] == 0:
@@ -307,7 +311,7 @@ class SWInt_SVM:
                 if labels_ggexc_predicted[i] == 1:
                     num_exc_gg = num_exc_gg + 1
 
-        prob_gg_exc = 1.0 * num_gg_exc / num_exc
+        prob_gg_exc = 1.0 * num_gg_exc / num_exc #probability of predicting gg, given that the state is exc
         prob_exc_gg = 1.0 * num_exc_gg / num_gg
 
         fid_ggexc = 1 - (prob_gg_exc + prob_exc_gg) / 2
@@ -404,3 +408,47 @@ class SWInt_SVM:
 
         return labels_ggexc_predicted
 
+
+def demod(rawdata):
+    """
+    Performs demodulation on the raw trajectories.
+
+    :param rawdata: acquired raw data; should be an np.array with shape (2, numTrajPerLabel, 4, numTimeBinsPerTrajectory)
+    :return: a tuple: (traj, labels); traj is the demodded trajectories (which can be directly inputted into the classifiers), labels is the label for each trajectory
+    """
+
+    #: params for the rawdata
+    numTrajs = rawdata.shape[1] ##num trajectories per label
+    numTimeBins = rawdata.shape[3] ##number of time bins in each trajectory
+
+    #: params for demod
+    demod_freq =   0.047000000 #47 MHz = 0.047GHz
+    clock_freq = 1.000000000 # 1000MHz =1 GHz
+    rotation = 0
+    # demod_decay = None  #obsolete
+    start_window = 0 #units of time
+    end_window = numTimeBins
+
+    #: demod code
+    times = np.arange( int(start_window*clock_freq), int(end_window*clock_freq) ) * float(demod_freq/(clock_freq)) #unitless
+    demod_exp = np.exp(1j*(2*np.pi*times-rotation))
+    demod_exp_I = np.array(np.real(demod_exp), dtype='float32')
+    demod_exp_Q = np.array(np.imag(demod_exp), dtype='float32')
+
+    #: traj_demod and traj_av_demod
+    traj_demod=np.zeros((2, 4, numTrajs, numTimeBins)) # indices are: iqIndex, labelIndex, trajIndex, timeIndex  ;  value is the i or q quadrature value
+    traj_av_demod=np.zeros((2, 4, numTimeBins)) # averages over the trajs; indices: iqIndex, labelIndex, timeIndex
+
+
+    for labelIndex in np.arange(4):
+        for trajIndex in np.arange(numTrajs):
+            traj_demod[0,labelIndex,trajIndex]=( (rawdata[0, trajIndex, labelIndex, :] - rawdata[0, trajIndex, labelIndex, :].mean())*demod_exp_I    -    (rawdata[1, trajIndex, labelIndex, :] - rawdata[1, trajIndex, labelIndex, :].mean())*demod_exp_Q)
+            traj_demod[1,labelIndex,trajIndex]=( (rawdata[0, trajIndex, labelIndex, :] - rawdata[0, trajIndex, labelIndex, :].mean())*demod_exp_Q    +    (rawdata[1, trajIndex, labelIndex, :] - rawdata[1, trajIndex, labelIndex, :].mean())*demod_exp_I)
+        traj_av_demod[0, labelIndex] = traj_demod[0, labelIndex,:,:].mean(0)
+        traj_av_demod[1, labelIndex] = traj_demod[1, labelIndex,:,:].mean(0)
+
+    #: preprocess the data a little
+    traj = np.concatenate((traj_demod[:,0,:,:], traj_demod[:,1,:,:], traj_demod[:,2,:,:], traj_demod[:,3,:,:]), axis=1)
+    labels = np.concatenate((np.zeros(numTrajs), np.ones(numTrajs), 2*np.ones(numTrajs), 3*np.ones(numTrajs)), axis=0)
+
+    return traj, labels
