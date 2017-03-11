@@ -1,7 +1,8 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from traj_classification import *
+import traj_classification as tc
+from sklearn.decomposition import PCA
 import h5py
 
 
@@ -69,20 +70,54 @@ import h5py
 
 
 
-traj_train = np.load('traj_train.npy')
-labels_train = np.load('labels_train.npy')
-print 'train traj and labels loaded'
-
-traj_test = np.load('traj_test.npy')
-labels_test = np.load('labels_test.npy')
-print 'test traj and labels loaded'
+# traj_train = np.load('traj_train.npy')
+# labels_train = np.load('labels_train.npy')
+# print 'train traj and labels loaded'
+#
+# traj_test = np.load('traj_test.npy')
+# labels_test = np.load('labels_test.npy')
+# print 'test traj and labels loaded'
 
 
 # clf = NaiveInt()
 # clf.fit(traj_train, labels_train, doRotate=True, suppressPlots=False)
 # print 'test fid:', clf.score(traj_test, labels_test)
 
-clf = SWInt_SVM()
-clf.fit(traj_train, labels_train)
-print 'test fid: ', clf.score(traj_test, labels_test)
-print 'predicted labels for test set', clf.predict(traj_test)
+
+rawdata = np.zeros((2,0,4,7000))
+filenames_large = ['//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190223_Trajectories_0_/190223_Trajectories_0_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190235_Trajectories_1_/190235_Trajectories_1_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190248_Trajectories_2_/190248_Trajectories_2_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190300_Trajectories_3_/190300_Trajectories_3_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190312_Trajectories_4_/190312_Trajectories_4_.hdf5']
+filenames_small = ['//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190223_Trajectories_0_/190223_Trajectories_0_.hdf5']
+
+for filename in filenames_small:
+    f = h5py.File(filename,'r')
+    rawdata = np.concatenate((rawdata, f['data']['Dependent0'][()]), axis=1) #this turns the h5data into a numpy file
+
+    print filename
+    print 'Shape of raw data: ', rawdata.shape
+    f.close()
+
+traj_train, labels_train = tc.demod(rawdata[:,:4000,:,:])
+traj_test, labels_test = tc.demod(rawdata[:,4000:5000,:,:])
+print 'train and test data demodded'
+
+#: code taken from __formatIntoFeatureVectorsAndLabels
+traj = traj_train
+labels = labels_train
+numTotalTraj = traj.shape[1]
+numTimeBins = traj.shape[2]  # 5000 #num time bins per traj
+slotSize = 50
+numSlots = numTimeBins / slotSize  # num slots per traj
+traj_slotted = np.reshape(traj, (2, numTotalTraj, numSlots, slotSize)).mean(3)
+inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
+labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ]) # this groups gg as label 0, and exc as label 1
+
+pca = PCA(n_components=5)
+print pca.fit(inputVectors)
+print 'pca explained variance ratio: ', pca.explained_variance_ratio_
+
+
+
+# clf = tc.SWInt_SVM()
+# clf.fit(traj_train, labels_train, typeSVM='linear_v2')
+# print 'test fid: ', clf.score(traj_test, labels_test)
+# print 'predicted labels for test set', clf.predict(traj_test)
