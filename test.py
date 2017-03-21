@@ -89,7 +89,7 @@ rawdata = np.zeros((2,0,4,7000))
 filenames_large = ['//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190223_Trajectories_0_/190223_Trajectories_0_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190235_Trajectories_1_/190235_Trajectories_1_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190248_Trajectories_2_/190248_Trajectories_2_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190300_Trajectories_3_/190300_Trajectories_3_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190312_Trajectories_4_/190312_Trajectories_4_.hdf5']
 filenames_small = ['//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190223_Trajectories_0_/190223_Trajectories_0_.hdf5', '//EMU/Emu/Projects/2016-3QubitCEQ/Data-Raw/20170308/190235_Trajectories_1_/190235_Trajectories_1_.hdf5']
 
-for filename in filenames_large:
+for filename in filenames_small:
     f = h5py.File(filename,'r')
     rawdata = np.concatenate((rawdata, f['data']['Dependent0'][()]), axis=1) #this turns the h5data into a numpy file
 
@@ -108,6 +108,23 @@ print 'train and test data demodded'
 #: SVM stuff
 ###
 
+traj_train, labels_train = tc.demod(rawdata[:,:4000,:,:]) #@@@ change the index depending on wheter using big or small dataset
+traj_test, labels_test = tc.demod(rawdata[:,4000:5000,:,:])
+print 'loaded train and test: ', 5000
+
+timeStart = time.time()
+print 'Time start: ', time.time() - timeStart
+
+clf = tc.SWInt_SVM()
+clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False)
+print 'test fid: ', clf.score(traj_test, labels_test)
+print 'predicted labels for test set', clf.predict(traj_test)
+
+print 'Time finish: ', time.time() - timeStart
+
+
+
+
 traj_train, labels_train = tc.demod(rawdata[:,:8000,:,:]) #@@@ change the index depending on wheter using big or small dataset
 traj_test, labels_test = tc.demod(rawdata[:,8000:10000,:,:])
 print 'loaded train and test: ', 10000
@@ -116,7 +133,7 @@ timeStart = time.time()
 print 'Time start: ', time.time() - timeStart
 
 clf = tc.SWInt_SVM()
-clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
+clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False)
 print 'test fid: ', clf.score(traj_test, labels_test)
 print 'predicted labels for test set', clf.predict(traj_test)
 
@@ -125,53 +142,52 @@ print 'Time finish: ', time.time() - timeStart
 
 
 
-
-traj_train, labels_train = tc.demod(rawdata[:,:12000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-traj_test, labels_test = tc.demod(rawdata[:,12000:15000,:,:])
-print 'loaded train and test: ', 15000
-
-timeStart = time.time()
-print 'Time start: ', time.time() - timeStart
-
-clf = tc.SWInt_SVM()
-clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
-print 'test fid: ', clf.score(traj_test, labels_test)
-print 'predicted labels for test set', clf.predict(traj_test)
-
-print 'Time finish: ', time.time() - timeStart
-
-
-
-
-
-traj_train, labels_train = tc.demod(rawdata[:,:16000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-traj_test, labels_test = tc.demod(rawdata[:,16000:20000,:,:])
-print 'loaded train and test: ', 20000
-
-timeStart = time.time()
-print 'Time start: ', time.time() - timeStart
-
-clf = tc.SWInt_SVM()
-clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
-print 'test fid: ', clf.score(traj_test, labels_test)
-print 'predicted labels for test set', clf.predict(traj_test)
-
-print 'Time finish: ', time.time() - timeStart
-
-
-
-
-
-traj_train, labels_train = tc.demod(rawdata[:,:20000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-traj_test, labels_test = tc.demod(rawdata[:,20000:25000,:,:])
-print 'loaded train and test: ', 25000
-
-timeStart = time.time()
-print 'Time start: ', time.time() - timeStart
-
-clf = tc.SWInt_SVM()
-clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
-print 'test fid: ', clf.score(traj_test, labels_test)
-print 'predicted labels for test set', clf.predict(traj_test)
-
-print 'Time finish: ', time.time() - timeStart
+# traj_train, labels_train = tc.demod(rawdata[:,:12000,:,:]) #@@@ change the index depending on wheter using big or small dataset
+# traj_test, labels_test = tc.demod(rawdata[:,12000:15000,:,:])
+# print 'loaded train and test: ', 15000
+#
+# timeStart = time.time()
+# print 'Time start: ', time.time() - timeStart
+#
+# clf = tc.SWInt_SVM()
+# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
+# print 'test fid: ', clf.score(traj_test, labels_test)
+# print 'predicted labels for test set', clf.predict(traj_test)
+#
+# print 'Time finish: ', time.time() - timeStart
+#
+#
+#
+#
+#
+# traj_train, labels_train = tc.demod(rawdata[:,:16000,:,:]) #@@@ change the index depending on wheter using big or small dataset
+# traj_test, labels_test = tc.demod(rawdata[:,16000:20000,:,:])
+# print 'loaded train and test: ', 20000
+#
+# timeStart = time.time()
+# print 'Time start: ', time.time() - timeStart
+#
+# clf = tc.SWInt_SVM()
+# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
+# print 'test fid: ', clf.score(traj_test, labels_test)
+# print 'predicted labels for test set', clf.predict(traj_test)
+#
+# print 'Time finish: ', time.time() - timeStart
+#
+#
+#
+#
+#
+# traj_train, labels_train = tc.demod(rawdata[:,:20000,:,:]) #@@@ change the index depending on wheter using big or small dataset
+# traj_test, labels_test = tc.demod(rawdata[:,20000:25000,:,:])
+# print 'loaded train and test: ', 25000
+#
+# timeStart = time.time()
+# print 'Time start: ', time.time() - timeStart
+#
+# clf = tc.SWInt_SVM()
+# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
+# print 'test fid: ', clf.score(traj_test, labels_test)
+# print 'predicted labels for test set', clf.predict(traj_test)
+#
+# print 'Time finish: ', time.time() - timeStart
