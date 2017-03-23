@@ -259,6 +259,8 @@ class SWInt_SVM:
         self.usePCA = False
         self.pca = None
 
+        self.useDerivativeFeatures = False
+
     def __formatIntoFeatureVectorsAndLabels(self, traj, labels, fitNewPCA=False):
         """
         Helper function. Converts the traj and labels into a feature vector matrix (design matrix) and a labels array, which is the proper format to input into the SVM.
@@ -273,16 +275,18 @@ class SWInt_SVM:
         ###
         numSlots = numTimeBins / self.slotSize  # num slots per traj
 
-        #: obsolete code because it's too slow
-        # traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
-        # for trajIndex in np.arange(numTotalTraj):
-        #     for j in np.arange(numSlots): #j is slotIndex
-        #         traj_slotted[:, trajIndex, j] = traj[:, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean(1)
-        #         # traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
-
         traj_slotted = np.reshape(traj, (2, numTotalTraj, numSlots, self.slotSize)).mean(3)
 
-        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
+        if self.useDerivativeFeatures:
+            # traj_slotted_derivative = np.gradient(traj_slotted, axis=2)
+            # inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :], traj_slotted_derivative[0, :, :], traj_slotted_derivative[1, :, :]), axis=1)  # sample vectors to input into the SVM;
+
+            #@@@ fft instead
+            traj_slotted_fft = np.fft.fft(traj_slotted)
+            inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :],traj_slotted_fft[0, :, :], traj_slotted_fft[1, :, :]), axis=1)  # sample vectors to input into the SVM;
+        else:
+            inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1)  # sample vectors to input into the SVM;
+
         labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ]) # this groups gg as label 0, and exc as label 1
 
         inputVectors = preprocessing.scale(inputVectors)
@@ -334,7 +338,7 @@ class SWInt_SVM:
         return fid_ggexc
 
 
-    def fit(self, traj, labels, typeSVM='linear', slotSize=50, tuneC=True, lstC=None, validationFraction=0.25, suppressPlots=False, usePCA=False):
+    def fit(self, traj, labels, typeSVM='linear', slotSize=50, tuneC=True, lstC=None, validationFraction=0.25, suppressPlots=False, usePCA=False, useDerivativeFeatures=False):
         """
         Fits the SVM.
 
@@ -349,6 +353,7 @@ class SWInt_SVM:
         numTotalTraj = traj.shape[1]
         self.slotSize = slotSize
         self.usePCA = usePCA
+        self.useDerivativeFeatures = useDerivativeFeatures
 
         inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels, fitNewPCA=self.usePCA)
 
@@ -375,7 +380,7 @@ class SWInt_SVM:
 
             if lstC is None:
                 if typeSVM == 'linear':
-                    lstC = 10 ** np.linspace(-7, 0.5, 30)
+                    lstC = 10 ** np.linspace(-7, -0.5, 30)
                 elif typeSVM == 'rbf':
                     lstC = 10 ** np.linspace(-1, 1, 10)
                 elif typeSVM == 'linear_v2':

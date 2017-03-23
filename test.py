@@ -116,7 +116,7 @@ timeStart = time.time()
 print 'Time start: ', time.time() - timeStart
 
 clf = tc.SWInt_SVM()
-clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False)
+clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False, useDerivativeFeatures=False)
 print 'test fid: ', clf.score(traj_test, labels_test)
 print 'predicted labels for test set', clf.predict(traj_test)
 
@@ -125,19 +125,36 @@ print 'Time finish: ', time.time() - timeStart
 
 
 
-traj_train, labels_train = tc.demod(rawdata[:,:8000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-traj_test, labels_test = tc.demod(rawdata[:,8000:10000,:,:])
-print 'loaded train and test: ', 10000
+# traj_train, labels_train = tc.demod(rawdata[:,:4000,:,:]) #@@@ change the index depending on wheter using big or small dataset
+# traj_test, labels_test = tc.demod(rawdata[:,4000:5000,:,:])
+# print 'loaded train and test: ', 5000
+#
+# timeStart = time.time()
+# print 'Time start: ', time.time() - timeStart
+#
+# clf = tc.SWInt_SVM()
+# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False)
+# print 'test fid: ', clf.score(traj_test, labels_test)
+# print 'predicted labels for test set', clf.predict(traj_test)
+#
+# print 'Time finish: ', time.time() - timeStart
 
-timeStart = time.time()
-print 'Time start: ', time.time() - timeStart
 
-clf = tc.SWInt_SVM()
-clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False)
-print 'test fid: ', clf.score(traj_test, labels_test)
-print 'predicted labels for test set', clf.predict(traj_test)
 
-print 'Time finish: ', time.time() - timeStart
+
+# traj_train, labels_train = tc.demod(rawdata[:,:8000,:,:]) #@@@ change the index depending on wheter using big or small dataset
+# traj_test, labels_test = tc.demod(rawdata[:,8000:10000,:,:])
+# print 'loaded train and test: ', 10000
+#
+# timeStart = time.time()
+# print 'Time start: ', time.time() - timeStart
+#
+# clf = tc.SWInt_SVM()
+# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False)
+# print 'test fid: ', clf.score(traj_test, labels_test)
+# print 'predicted labels for test set', clf.predict(traj_test)
+#
+# print 'Time finish: ', time.time() - timeStart
 
 
 
