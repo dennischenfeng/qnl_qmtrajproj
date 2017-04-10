@@ -253,13 +253,17 @@ class SWInt_SVM:
     Assumes all trajectories have same number of time bins.
     """
 
-    def __init__(self): # TODO: if  want polynomial or rbf kernel, input as param in here
+    def __init__(self, typeSVM='linear', slotSize=50, usePCA=False, useExtraFeatures=True):
         self.clf_SVM = None #svm.LinearSVC(C=C)
-        self.slotSize = 0
-        self.usePCA = False
+        self.typeSVM = typeSVM
+        self.slotSize = slotSize
+        self.usePCA = usePCA
         self.pca = None
+        self.useExtraFeatures = useExtraFeatures
 
-        self.useDerivativeFeatures = False
+        validTypeSVMs = ['linear', 'rbf', 'linear_v2']
+        if self.typeSVM not in validTypeSVMs:
+            print "Error: typeSVM is not valid."
 
     def __formatIntoFeatureVectorsAndLabels(self, traj, labels, fitNewPCA=False):
         """
@@ -277,13 +281,14 @@ class SWInt_SVM:
 
         traj_slotted = np.reshape(traj, (2, numTotalTraj, numSlots, self.slotSize)).mean(3)
 
-        if self.useDerivativeFeatures:
-            # traj_slotted_derivative = np.gradient(traj_slotted, axis=2)
-            # inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :], traj_slotted_derivative[0, :, :], traj_slotted_derivative[1, :, :]), axis=1)  # sample vectors to input into the SVM;
+        if self.useExtraFeatures:
+            # derivative features
+            traj_slotted_derivative = np.gradient(traj_slotted, axis=2)
+            inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :], traj_slotted_derivative[0, :, :], traj_slotted_derivative[1, :, :]), axis=1)  # sample vectors to input into the SVM;
 
-            #@@@ fft instead
+            # fft features
             traj_slotted_fft = np.fft.fft(traj_slotted)
-            inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :],traj_slotted_fft[0, :, :], traj_slotted_fft[1, :, :]), axis=1)  # sample vectors to input into the SVM;
+            inputVectors = np.concatenate((inputVectors[:, :], traj_slotted_fft[0, :, :], traj_slotted_fft[1, :, :]), axis=1)  # sample vectors to input into the SVM;
         else:
             inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1)  # sample vectors to input into the SVM;
 
@@ -338,7 +343,7 @@ class SWInt_SVM:
         return fid_ggexc
 
 
-    def fit(self, traj, labels, typeSVM='linear', slotSize=50, tuneC=True, lstC=None, validationFraction=0.25, suppressPlots=False, usePCA=False, useDerivativeFeatures=False):
+    def fit(self, traj, labels, tuneC=True, lstC=None, validationFraction=0.2, suppressPlots=False):
         """
         Fits the SVM.
 
@@ -351,9 +356,6 @@ class SWInt_SVM:
         :return: self
         """
         numTotalTraj = traj.shape[1]
-        self.slotSize = slotSize
-        self.usePCA = usePCA
-        self.useDerivativeFeatures = useDerivativeFeatures
 
         inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels, fitNewPCA=self.usePCA)
 
@@ -362,14 +364,12 @@ class SWInt_SVM:
         inputVectors_shuffled, labels_ggexc_shuffled = shuffle(inputVectors, labels_ggexc)
 
         if tuneC == False:
-            if typeSVM == 'linear':
+            if self.typeSVM == 'linear':
                 self.clf_SVM = svm.LinearSVC(C=1.3e-4)
-            elif typeSVM == 'rbf':
+            elif self.typeSVM == 'rbf':
                 self.clf_SVM = svm.SVC(kernel='rbf', C=0.65) #C=1.32
-            elif typeSVM == 'linear_v2':
+            elif self.typeSVM == 'linear_v2':
                 self.clf_SVM = svm.SVC(kernel='linear', C=1.3e-4)
-            else:
-                print "Error: typeSVM is not valid."
 
             self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
         else:
@@ -379,24 +379,20 @@ class SWInt_SVM:
             startIndex_validation = int(numTotalTraj * (1 - validationFraction))
 
             if lstC is None:
-                if typeSVM == 'linear':
+                if self.typeSVM == 'linear':
                     lstC = 10 ** np.linspace(-7, -0.5, 30)
-                elif typeSVM == 'rbf':
+                elif self.typeSVM == 'rbf':
                     lstC = 10 ** np.linspace(-1, 1, 10)
-                elif typeSVM == 'linear_v2':
+                elif self.typeSVM == 'linear_v2':
                     lstC = 10 ** np.linspace(-7, 0.5, 30)
-                else:
-                    print "Error: typeSVM is not valid."
 
             for C in lstC:
-                if typeSVM == 'linear':
+                if self.typeSVM == 'linear':
                     self.clf_SVM = svm.LinearSVC(C=C)
-                elif typeSVM == 'rbf':
+                elif self.typeSVM == 'rbf':
                     self.clf_SVM = svm.SVC(kernel='rbf', C=C)
-                elif typeSVM == 'linear_v2':
+                elif self.typeSVM == 'linear_v2':
                     self.clf_SVM = svm.SVC(kernel='linear', C=C)
-                else:
-                    print "Error: typeSVM is not valid."
 
                 self.clf_SVM.fit(inputVectors_shuffled[0:startIndex_validation],
                                  labels_ggexc_shuffled[0:startIndex_validation])
@@ -447,12 +443,12 @@ class SWInt_SVM:
 
 
 
-            if typeSVM == 'linear':
+            if self.typeSVM == 'linear':
                 self.clf_SVM = svm.LinearSVC(C=optimalC)
-            elif typeSVM == 'rbf':
+            elif self.typeSVM == 'rbf':
                 # self.clf_SVM = svm.SVC(kernel='rbf', C=optimalC, gamma=optimalGamma)
                 self.clf_SVM = svm.SVC(kernel='rbf', C=optimalC)
-            elif typeSVM == 'linear_v2':
+            elif self.typeSVM == 'linear_v2':
                 self.clf_SVM = svm.SVC(kernel='linear', C=optimalC)
 
             self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
@@ -462,7 +458,7 @@ class SWInt_SVM:
 
         fid_ggexc = self.__findFidelity(inputVectors_shuffled, labels_ggexc_shuffled)
 
-        print 'train fid: ', fid_ggexc
+        # print 'train fid: ', fid_ggexc
 
         if suppressPlots == False:
             plt.show()

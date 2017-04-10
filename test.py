@@ -5,6 +5,7 @@ import traj_classification as tc
 from sklearn.decomposition import PCA
 import h5py
 import time
+import pickle
 
 
 # for filename in ['../163223_Trajectories.hdf5']:
@@ -97,33 +98,14 @@ for filename in filenames_small:
     print 'Shape of raw data: ', rawdata.shape
     f.close()
 
-traj_train, labels_train = tc.demod(rawdata[:,:8000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-traj_test, labels_test = tc.demod(rawdata[:,8000:10000,:,:])
-print 'train and test data demodded'
 
 
 
 
 
-#: SVM stuff
+
+#: testing
 ###
-
-traj_train, labels_train = tc.demod(rawdata[:,:4000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-traj_test, labels_test = tc.demod(rawdata[:,4000:5000,:,:])
-print 'loaded train and test: ', 5000
-
-timeStart = time.time()
-print 'Time start: ', time.time() - timeStart
-
-clf = tc.SWInt_SVM()
-clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False, useDerivativeFeatures=False)
-print 'test fid: ', clf.score(traj_test, labels_test)
-print 'predicted labels for test set', clf.predict(traj_test)
-
-print 'Time finish: ', time.time() - timeStart
-
-
-
 
 # traj_train, labels_train = tc.demod(rawdata[:,:4000,:,:]) #@@@ change the index depending on wheter using big or small dataset
 # traj_test, labels_test = tc.demod(rawdata[:,4000:5000,:,:])
@@ -132,8 +114,9 @@ print 'Time finish: ', time.time() - timeStart
 # timeStart = time.time()
 # print 'Time start: ', time.time() - timeStart
 #
-# clf = tc.SWInt_SVM()
-# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False)
+# clf = tc.SWInt_SVM(typeSVM='linear', usePCA=False, useExtraFeatures=True)
+# clf.fit(traj_train, labels_train, tuneC=True, suppressPlots=True)
+# print 'train fid: ', clf.score(traj_train, labels_train)
 # print 'test fid: ', clf.score(traj_test, labels_test)
 # print 'predicted labels for test set', clf.predict(traj_test)
 #
@@ -141,70 +124,88 @@ print 'Time finish: ', time.time() - timeStart
 
 
 
+lstDataSize = [2500, 5000, 7500, 10000] #[2500, 5000, 7500, 10000, 15000]
+lstSlotSize = [25, 40, 50, 100, 125, 200, 250, 500] # [30, 40, 50, 60, 70, 100, 150, 200]
 
-# traj_train, labels_train = tc.demod(rawdata[:,:8000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-# traj_test, labels_test = tc.demod(rawdata[:,8000:10000,:,:])
-# print 'loaded train and test: ', 10000
-#
-# timeStart = time.time()
-# print 'Time start: ', time.time() - timeStart
-#
-# clf = tc.SWInt_SVM()
-# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=False)
-# print 'test fid: ', clf.score(traj_test, labels_test)
-# print 'predicted labels for test set', clf.predict(traj_test)
-#
-# print 'Time finish: ', time.time() - timeStart
+arrayFid = np.zeros((len(lstDataSize), len(lstTrueFalse), len(lstSlotSize), 2 ))
+lstClf = []
+lstTimes = []
+
+for i in np.arange(len(lstDataSize)):
+
+    testFraction = 0.2
+    print 'Starting dataSize: ', lstDataSize[i], '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'
+
+    dataSize = lstDataSize[i]
+    startTestIndex = int(dataSize * (1 - testFraction))
+    traj_train, labels_train = tc.demod(rawdata[:, :startTestIndex, :, :])  # @@@ change the index depending on wheter using big or small dataset
+    traj_test, labels_test = tc.demod(rawdata[:, startTestIndex:dataSize, :, :])
+    print 'demodded train and test'
+
+
+    for k in np.arange(len(lstSlotSize)):
+        print 'Starting slotSize: ', lstSlotSize[k], '@@@@@@@@@@@'
+
+        timeStart = time.time()
+        clf = tc.SWInt_SVM(typeSVM='linear', slotSize=lstSlotSize[k])
+        clf.fit(traj_train, labels_train, tuneC=True, lstC=10**np.linspace(-5, -2, 20), suppressPlots=True)
+        timeFinish = time.time() - timeStart
+
+
+        fid = np.array([clf.score(traj_train, labels_train), clf.score(traj_test, labels_test)])
+        arrayFid[i, j, k, :] = fid[:]
+        lstClf += [clf]
+        lstTimes += [timeFinish]
 
 
 
 
-# traj_train, labels_train = tc.demod(rawdata[:,:12000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-# traj_test, labels_test = tc.demod(rawdata[:,12000:15000,:,:])
-# print 'loaded train and test: ', 15000
-#
-# timeStart = time.time()
-# print 'Time start: ', time.time() - timeStart
-#
-# clf = tc.SWInt_SVM()
-# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
-# print 'test fid: ', clf.score(traj_test, labels_test)
-# print 'predicted labels for test set', clf.predict(traj_test)
-#
-# print 'Time finish: ', time.time() - timeStart
+
+
+# lstDataSize = [2500, 5000, 7500, 10000, 15000] #[2500, 5000, 7500, 10000, 15000]
+# lstTrueFalse = [True, False]
+# lstSlotSize = [25, 40, 50, 100, 125, 200, 250, 500] # [30, 40, 50, 60, 70, 100, 150, 200]
 #
 #
+# arrayFid = np.zeros((len(lstDataSize), len(lstTrueFalse), len(lstSlotSize), 2 ))
+# lstClf = []
+# lstTimes = []
+#
+# for i in np.arange(len(lstDataSize)):
+#     testFraction = 0.2
+#
+#     print 'Starting dataSize: ', lstDataSize[i], '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@'
+#
+#     dataSize = lstDataSize[i]
+#     startTestIndex = int(dataSize * (1 - testFraction))
+#     traj_train, labels_train = tc.demod(
+#         rawdata[:, :startTestIndex, :, :])  # @@@ change the index depending on wheter using big or small dataset
+#     traj_test, labels_test = tc.demod(rawdata[:, startTestIndex:dataSize, :, :])
+#     print 'demodded train and test'
+#
+#     for j in np.arange(len(lstTrueFalse)):
+#         print 'Starting useExtraFeatures: ', lstTrueFalse[j], '@@@@@@@@@@@@@@@@@@@'
+#
+#         for k in np.arange(len(lstSlotSize)):
+#             print 'Starting slotSize: ', lstSlotSize[k], '@@@@@@@@@@@'
+#
+#             timeStart = time.time()
+#             clf = tc.SWInt_SVM(typeSVM='linear', slotSize=lstSlotSize[k], usePCA=False, useExtraFeatures=lstTrueFalse[j])
+#             clf.fit(traj_train, labels_train, tuneC=True, lstC=10**np.linspace(-5, -2, 20), suppressPlots=True)
+#             timeFinish = time.time() - timeStart
 #
 #
-#
-# traj_train, labels_train = tc.demod(rawdata[:,:16000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-# traj_test, labels_test = tc.demod(rawdata[:,16000:20000,:,:])
-# print 'loaded train and test: ', 20000
-#
-# timeStart = time.time()
-# print 'Time start: ', time.time() - timeStart
-#
-# clf = tc.SWInt_SVM()
-# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
-# print 'test fid: ', clf.score(traj_test, labels_test)
-# print 'predicted labels for test set', clf.predict(traj_test)
-#
-# print 'Time finish: ', time.time() - timeStart
+#             fid = np.array([clf.score(traj_train, labels_train), clf.score(traj_test, labels_test)])
+#             arrayFid[i, j, k, :] = fid[:]
+#             lstClf += [clf]
+#             lstTimes += [timeFinish]
 #
 #
-#
-#
-#
-# traj_train, labels_train = tc.demod(rawdata[:,:20000,:,:]) #@@@ change the index depending on wheter using big or small dataset
-# traj_test, labels_test = tc.demod(rawdata[:,20000:25000,:,:])
-# print 'loaded train and test: ', 25000
-#
-# timeStart = time.time()
-# print 'Time start: ', time.time() - timeStart
-#
-# clf = tc.SWInt_SVM()
-# clf.fit(traj_train, labels_train, typeSVM='rbf', tuneC=False, usePCA=True)
-# print 'test fid: ', clf.score(traj_test, labels_test)
-# print 'predicted labels for test set', clf.predict(traj_test)
-#
-# print 'Time finish: ', time.time() - timeStart
+# with open("test_storage_3.p", 'wb') as f:
+#     pickle.dump((arrayFid, lstClf, lstTimes), f)
+
+
+
+
+
+
