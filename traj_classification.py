@@ -253,7 +253,7 @@ class SWInt_SVM:
     Assumes all trajectories have same number of time bins.
     """
 
-    def __init__(self, typeSVM='linear', slotSize=50, usePCA=False, useExtraFeatures=True):
+    def __init__(self, typeSVM='linear', slotSize=100, usePCA=False, useExtraFeatures=True):
         self.clf_SVM = None #svm.LinearSVC(C=C)
         self.typeSVM = typeSVM
         self.slotSize = slotSize
@@ -380,7 +380,7 @@ class SWInt_SVM:
 
             if lstC is None:
                 if self.typeSVM == 'linear':
-                    lstC = 10 ** np.linspace(-7, -0.5, 30)
+                    lstC = 10**np.linspace(-5, -2, 20)
                 elif self.typeSVM == 'rbf':
                     lstC = 10 ** np.linspace(-1, 1, 10)
                 elif self.typeSVM == 'linear_v2':
