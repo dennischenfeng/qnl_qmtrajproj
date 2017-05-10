@@ -3,6 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.utils import shuffle
 from sklearn import svm
+from sklearn import preprocessing
+from sklearn.decomposition import PCA
+import time
 
 class NaiveInt(object):
     """
@@ -250,16 +253,24 @@ class SWInt_SVM(object):
     Assumes all trajectories have same number of time bins.
     """
 
-    def __init__(self): # TODO: if  want polynomial or rbf kernel, input as param in here
+    def __init__(self, typeSVM='linear', slotSize=100, usePCA=False, useExtraFeatures=True):
         self.clf_SVM = None #svm.LinearSVC(C=C)
-        self.slotSize = 0
+        self.typeSVM = typeSVM
+        self.slotSize = slotSize
+        self.usePCA = usePCA
+        self.pca = None
+        self.useExtraFeatures = useExtraFeatures
 
-    def __formatIntoFeatureVectorsAndLabels(self, traj, labels):
+        validTypeSVMs = ['linear', 'rbf', 'linear_v2']
+        if self.typeSVM not in validTypeSVMs:
+            print "Error: typeSVM is not valid."
+
+    def __formatIntoFeatureVectorsAndLabels(self, traj, labels, fitNewPCA=False):
         """
         Helper function. Converts the traj and labels into a feature vector matrix (design matrix) and a labels array, which is the proper format to input into the SVM.
         :param traj: the demodded trajectories in an np array, with 3 indices: iqIndex, trajIndex, timeIndex
         :param labels: the labels corresponding to the trajectories, 1d np array
-        :return: inputVectors (each feature vector is the I vector concatted with the Q vector) and labels_ggexc (labels for each trajectory, 0 for gg, 1 for exc)
+        :return: scaled (i.e. mean removal and scaled variance to 1) inputVectors (each feature vector is the I vector concatted with the Q vector); and labels_ggexc (labels for each trajectory, 0 for gg, 1 for exc)
         """
         numTotalTraj = traj.shape[1]
         numTimeBins = traj.shape[2]  # 5000 #num time bins per traj
@@ -268,24 +279,37 @@ class SWInt_SVM(object):
         ###
         numSlots = numTimeBins / self.slotSize  # num slots per traj
 
-        #: obsolete code because it's too slow
-        # traj_slotted = np.zeros((2, numTotalTraj, numSlots))  # indices: iqIndex, labelIndex, trajIndex, slotIndex
-        # for trajIndex in np.arange(numTotalTraj):
-        #     for j in np.arange(numSlots): #j is slotIndex
-        #         traj_slotted[:, trajIndex, j] = traj[:, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean(1)
-        #         # traj_slotted[1, trajIndex, j] = traj[1, trajIndex, j*self.slotSize:j*self.slotSize+self.slotSize].mean()
-
         traj_slotted = np.reshape(traj, (2, numTotalTraj, numSlots, self.slotSize)).mean(3)
 
-        inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1) #sample vectors to input into the SVM;
+        if self.useExtraFeatures:
+            # derivative features
+            traj_slotted_derivative = np.gradient(traj_slotted, axis=2)
+            inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :], traj_slotted_derivative[0, :, :], traj_slotted_derivative[1, :, :]), axis=1)  # sample vectors to input into the SVM;
+
+            # fft features
+            traj_slotted_fft = np.fft.fft(traj_slotted)
+            inputVectors = np.concatenate((inputVectors[:, :], traj_slotted_fft[0, :, :], traj_slotted_fft[1, :, :]), axis=1)  # sample vectors to input into the SVM;
+        else:
+            inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1)  # sample vectors to input into the SVM;
+
         labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ]) # this groups gg as label 0, and exc as label 1
+
+        inputVectors = preprocessing.scale(inputVectors)
+
+        if self.usePCA:
+            if fitNewPCA:
+                self.pca = PCA(n_components=20, whiten=True)
+                self.pca.fit(inputVectors)
+                print 'PCA explained variance ratio: ', self.pca.explained_variance_ratio_
+
+            inputVectors = self.pca.transform(inputVectors)
 
         return inputVectors, labels_ggexc
 
 
     def __findFidelity(self, inputVectors, labels_ggexc):
         """
-        Helper function. Calculates the fidelity
+        Helper function. Calculates the fidelity (fid_ggexc)
         :param inputVectors:
         :param labels_ggexc:
         :return: fidelity
@@ -319,7 +343,7 @@ class SWInt_SVM(object):
         return fid_ggexc
 
 
-    def fit(self, traj, labels, slotSize=50, tuneC=True, lstC=None, validationFraction=0.25):
+    def fit(self, traj, labels, tuneC=True, lstC=None, validationFraction=0.2, suppressPlots=False):
         """
         Fits the SVM.
 
@@ -332,28 +356,49 @@ class SWInt_SVM(object):
         :return: self
         """
         numTotalTraj = traj.shape[1]
-        self.slotSize = slotSize
 
-        inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels)
+        inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels, fitNewPCA=self.usePCA)
 
         #: fit the clf_SVM, tune C if chosen to
         ###
-        inputVectors_shuffled, labels_ggexc_shuffled = shuffle(inputVectors, labels_ggexc, random_state=0)
+        inputVectors_shuffled, labels_ggexc_shuffled = shuffle(inputVectors, labels_ggexc)
 
         if tuneC == False:
-            self.clf_SVM = svm.LinearSVC(C=3.3e-10)
+            if self.typeSVM == 'linear':
+                self.clf_SVM = svm.LinearSVC(C=1.3e-4)
+            elif self.typeSVM == 'rbf':
+                self.clf_SVM = svm.SVC(kernel='rbf', C=0.65) #C=1.32
+            elif self.typeSVM == 'linear_v2':
+                self.clf_SVM = svm.SVC(kernel='linear', C=1.3e-4)
+
             self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
         else:
+            #: tune C
             print 'Tuning C...'
             lstFid = []
             startIndex_validation = int(numTotalTraj * (1 - validationFraction))
+
             if lstC is None:
-                lstC = 10 ** np.linspace(-15, -7, 30)
+                if self.typeSVM == 'linear':
+                    lstC = 10**np.linspace(-5, -2, 20)
+                elif self.typeSVM == 'rbf':
+                    lstC = 10 ** np.linspace(-1, 1, 10)
+                elif self.typeSVM == 'linear_v2':
+                    lstC = 10 ** np.linspace(-7, 0.5, 30)
+
             for C in lstC:
-                self.clf_SVM = svm.LinearSVC(C=C)
-                self.clf_SVM.fit(inputVectors_shuffled[0:startIndex_validation], labels_ggexc_shuffled[0:startIndex_validation])
-                temp_fid = self.__findFidelity(inputVectors_shuffled[startIndex_validation: ], labels_ggexc_shuffled[startIndex_validation: ])
-                print 'On C =', C, '; fid =', temp_fid
+                if self.typeSVM == 'linear':
+                    self.clf_SVM = svm.LinearSVC(C=C)
+                elif self.typeSVM == 'rbf':
+                    self.clf_SVM = svm.SVC(kernel='rbf', C=C)
+                elif self.typeSVM == 'linear_v2':
+                    self.clf_SVM = svm.SVC(kernel='linear', C=C)
+
+                self.clf_SVM.fit(inputVectors_shuffled[0:startIndex_validation],
+                                 labels_ggexc_shuffled[0:startIndex_validation])
+                temp_fid = self.__findFidelity(inputVectors_shuffled[startIndex_validation:],
+                                               labels_ggexc_shuffled[startIndex_validation:])
+                print 'On C =', C, '; validation fid =', temp_fid
                 lstFid = lstFid + [temp_fid]
 
             plt.figure()
@@ -366,14 +411,57 @@ class SWInt_SVM(object):
             optimalC = lstC[np.argmax(lstFid)]
             print 'Chose optimal C = ', optimalC
 
-            self.clf_SVM = svm.LinearSVC(C=optimalC)
+
+            # #: tune gamma
+            # if typeSVM == 'rbf':
+            #     print 'Tuning gamma...'
+            #     lstFid = []
+            #     startIndex_validation = int(numTotalTraj * (1 - validationFraction))
+            #
+            #     lstGamma = [0.00088]
+            #     # lstGamma = 10**np.linspace(-5.5, -2, 20)
+            #
+            #     for gamma in lstGamma:
+            #         self.clf_SVM = svm.SVC(kernel='rbf', C=optimalC, gamma=gamma)
+            #
+            #         self.clf_SVM.fit(inputVectors_shuffled[0:startIndex_validation],
+            #                          labels_ggexc_shuffled[0:startIndex_validation])
+            #         temp_fid = self.__findFidelity(inputVectors_shuffled[startIndex_validation:],
+            #                                        labels_ggexc_shuffled[startIndex_validation:])
+            #         print 'On gamma =', gamma, '; validation fid =', temp_fid
+            #         lstFid = lstFid + [temp_fid]
+            #
+            #     plt.figure()
+            #     plt.plot(lstGamma, lstFid)
+            #     plt.gca().set_xscale('log')
+            #     plt.title('Tuning gamma')
+            #     plt.xlabel('gamma')
+            #     plt.ylabel('Fidelity')
+            #
+            #     optimalGamma = lstGamma[np.argmax(lstFid)]
+            #     print 'Chose optimal gamma = ', optimalGamma
+
+
+
+            if self.typeSVM == 'linear':
+                self.clf_SVM = svm.LinearSVC(C=optimalC)
+            elif self.typeSVM == 'rbf':
+                # self.clf_SVM = svm.SVC(kernel='rbf', C=optimalC, gamma=optimalGamma)
+                self.clf_SVM = svm.SVC(kernel='rbf', C=optimalC)
+            elif self.typeSVM == 'linear_v2':
+                self.clf_SVM = svm.SVC(kernel='linear', C=optimalC)
+
             self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
+
+
+
 
         fid_ggexc = self.__findFidelity(inputVectors_shuffled, labels_ggexc_shuffled)
 
-        print 'train fid_ggexc: ', fid_ggexc
+        # print 'train fid: ', fid_ggexc
 
-        plt.show()
+        if suppressPlots == False:
+            plt.show()
 
         return self
 
@@ -407,6 +495,9 @@ class SWInt_SVM(object):
         labels_ggexc_predicted = self.clf_SVM.predict(inputVectors)
 
         return labels_ggexc_predicted
+
+
+
 
 
 def demod(rawdata):
