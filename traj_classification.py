@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.utils import shuffle
 from sklearn import svm
 
-class NaiveInt:
+class NaiveInt(object):
     """
     Classifier using the naive integration method.
     Assumes 4 labels only: gg, ge, eg, ee.
@@ -235,7 +235,7 @@ class NaiveInt:
         print 'needs implementation'
 
 
-class SWInt_DiffAvgTraj:
+class SWInt_DiffAvgTraj(object):
     """
     Classifier using the slot weights method. Calculates slot weights using the difference of average trajectories.
     Assumes 4 labels only: gg, ge, eg, ee.
@@ -243,7 +243,7 @@ class SWInt_DiffAvgTraj:
     """
 
 
-class SWInt_SVM:
+class SWInt_SVM(object):
     """
     Classifier using the slot weights method. Calculates (hopefully optimal) slot weights using an SVM. Includes option to tune the hyperparameter C for the linear SVM.
     Assumes 4 labels only: gg, ge, eg, ee.
