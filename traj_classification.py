@@ -238,12 +238,13 @@ class NaiveInt(object):
         print 'needs implementation'
 
 
-class SWInt_DiffAvgTraj(object):
-    """
-    Classifier using the slot weights method. Calculates slot weights using the difference of average trajectories.
-    Assumes 4 labels only: gg, ge, eg, ee.
-    Assumes all trajectories have same number of time bins.
-    """
+# Not implemented, because unnecessary. The SWInt_SVM classifier is expected to give better classification fidelity than the SWInt_DiffAvgTraj classifier.
+# class SWInt_DiffAvgTraj(object):
+#     """
+#     Classifier using the slot weights method. Calculates slot weights using the difference of average trajectories.
+#     Assumes 4 labels only: gg, ge, eg, ee.
+#     Assumes all trajectories have same number of time bins.
+#     """
 
 
 class SWInt_SVM(object):
