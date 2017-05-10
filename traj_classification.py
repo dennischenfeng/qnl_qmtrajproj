@@ -58,35 +58,38 @@ class NaiveInt(object):
         numTotalTraj = traj.shape[1]
         numTimeBins = traj.shape[2]  # 5000 #num time bins per traj
 
-        numTraj = [0, 0, 0, 0]  #num trajectories for each label; indices: labelIndex (aka label)
-        traj_separated = [[], [], [], []] # trajectories separated into 4 groups based on label; indices: [label][trajIndex][iqIndex, timeIndex]
+        # we only want to differentiate between ground and excited, so we will interpret any label 0 as ground (gg) and any other label as excited (exc).
+        labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj)])
+
+        numTraj = [0, 0]  #num trajectories for each label; indices: label_ggexc
+        traj_separated = [[], []] # trajectories separated into 2 groups based on label; indices: [label_ggexc][trajIndex][iqIndex, timeIndex]
 
         for trajIndex in np.arange(numTotalTraj):
-            label = int(labels[trajIndex])
-            numTraj[label] = numTraj[label] + 1
-            traj_separated[label] = traj_separated[label] + [traj[:, trajIndex, :]]
+            label_ggexc = int(labels_ggexc[trajIndex])
+            numTraj[label_ggexc] = numTraj[label_ggexc] + 1
+            traj_separated[label_ggexc] = traj_separated[label_ggexc] + [traj[:, trajIndex, :]]
 
-        self.intTraj = [np.zeros([2, numTraj[0]]), np.zeros([2, numTraj[1]]), np.zeros([2, numTraj[2]]), np.zeros([2, numTraj[3]])] #indices: [label][iqIndex, trajIndex]
+        self.intTraj = [np.zeros([2, numTraj[0]]), np.zeros([2, numTraj[1]])] #indices: [label_ggexc][iqIndex, trajIndex]
 
-        for label in [0, 1, 2, 3]:
-            for trajIndex in np.arange(numTraj[label]):
-                self.intTraj[label][0, trajIndex] = traj_separated[label][trajIndex][0, :].mean() / numTimeBins
-                self.intTraj[label][1, trajIndex] = traj_separated[label][trajIndex][1, :].mean() / numTimeBins
+        for label_ggexc in [0, 1]:
+            for trajIndex in np.arange(numTraj[label_ggexc]):
+                self.intTraj[label_ggexc][0, trajIndex] = traj_separated[label_ggexc][trajIndex][0, :].mean() / numTimeBins
+                self.intTraj[label_ggexc][1, trajIndex] = traj_separated[label_ggexc][trajIndex][1, :].mean() / numTimeBins
 
 
 
         #: calculate hist2d's and plot them
         ###
 
-        minIntTraj_I = np.min([np.min(self.intTraj[0][0, :]), np.min(self.intTraj[1][0, :]), np.min(self.intTraj[2][0, :]), np.min(self.intTraj[3][0, :])])
-        maxIntTraj_I = np.max([np.max(self.intTraj[0][0, :]), np.max(self.intTraj[1][0, :]), np.max(self.intTraj[2][0, :]), np.max(self.intTraj[3][0, :])])
-        minIntTraj_Q = np.min([np.min(self.intTraj[0][1, :]), np.min(self.intTraj[1][1, :]), np.min(self.intTraj[2][1, :]), np.min(self.intTraj[3][1, :])])
-        maxIntTraj_Q = np.max([np.max(self.intTraj[0][1, :]), np.max(self.intTraj[1][1, :]), np.max(self.intTraj[2][1, :]), np.max(self.intTraj[3][1, :])])
+        minIntTraj_I = np.min([np.min(self.intTraj[0][0, :]), np.min(self.intTraj[1][0, :])])
+        maxIntTraj_I = np.max([np.max(self.intTraj[0][0, :]), np.max(self.intTraj[1][0, :])])
+        minIntTraj_Q = np.min([np.min(self.intTraj[0][1, :]), np.min(self.intTraj[1][1, :])])
+        maxIntTraj_Q = np.max([np.max(self.intTraj[0][1, :]), np.max(self.intTraj[1][1, :])])
         self.hist2d_gg, self.binEdges_I, self.binEdges_Q = np.histogram2d(self.intTraj[0][0, :], self.intTraj[0][1, :], bins=numBins, range=[[minIntTraj_I, maxIntTraj_I], [minIntTraj_Q, maxIntTraj_Q]])
 
-        intTraj_exc_I = np.concatenate([self.intTraj[1][0, :], self.intTraj[2][0, :], self.intTraj[3][0, :]])
-        intTraj_exc_Q = np.concatenate([self.intTraj[1][1, :], self.intTraj[2][1, :], self.intTraj[3][1, :]])
-        self.hist2d_exc, _ , _ = np.histogram2d(intTraj_exc_I, intTraj_exc_Q, bins=numBins, range=[[minIntTraj_I, maxIntTraj_I], [minIntTraj_Q, maxIntTraj_Q]])
+        # intTraj_exc_I = np.concatenate([self.intTraj[1][0, :], self.intTraj[2][0, :], self.intTraj[3][0, :]])
+        # intTraj_exc_Q = np.concatenate([self.intTraj[1][1, :], self.intTraj[2][1, :], self.intTraj[3][1, :]])
+        self.hist2d_exc, _ , _ = np.histogram2d(self.intTraj[1][0, :], self.intTraj[1][1, :], bins=numBins, range=[[minIntTraj_I, maxIntTraj_I], [minIntTraj_Q, maxIntTraj_Q]])
 
         #: plot the (non-rotated) plots
         if suppressPlots == False:
@@ -110,25 +113,25 @@ class NaiveInt(object):
         ###
 
         if doRotate:
-            self.theta = np.arctan2(intTraj_exc_I.mean() - self.intTraj[0][0, :].mean(), intTraj_exc_Q.mean() - self.intTraj[0][1, :].mean())
-            self.intTraj_rotated = [np.zeros([2, numTraj[0]]), np.zeros([2, numTraj[1]]), np.zeros([2, numTraj[2]]), np.zeros([2, numTraj[3]])] #indices: [label][iqIndex, trajIndex]
+            self.theta = np.arctan2(self.intTraj[1][0,:].mean() - self.intTraj[0][0, :].mean(), self.intTraj[1][1,:].mean() - self.intTraj[0][1, :].mean())
+            self.intTraj_rotated = [np.zeros([2, numTraj[0]]), np.zeros([2, numTraj[1]])] #indices: [label_ggexc][iqIndex, trajIndex]
 
-            for label in [0, 1, 2, 3]:
-                mag = np.sqrt(self.intTraj[label][0,:]**2 + self.intTraj[label][1,:]**2) #the magnitude (length) of each IQ vector in I-Q space
-                phi = np.arctan2(self.intTraj[label][0,:], self.intTraj[label][1,:]) #the phase (i.e. angle) of each IQ vector in IQ space
-                self.intTraj_rotated[label][0,:] = mag * np.cos(phi - self.theta)
-                self.intTraj_rotated[label][1,:] = mag * np.sin(phi - self.theta)
+            for label_ggexc in [0, 1]:
+                mag = np.sqrt(self.intTraj[label_ggexc][0,:]**2 + self.intTraj[label_ggexc][1,:]**2) #the magnitude (length) of each IQ vector in I-Q space
+                phi = np.arctan2(self.intTraj[label_ggexc][0,:], self.intTraj[label_ggexc][1,:]) #the phase (i.e. angle) of each IQ vector in IQ space
+                self.intTraj_rotated[label_ggexc][0,:] = mag * np.cos(phi - self.theta)
+                self.intTraj_rotated[label_ggexc][1,:] = mag * np.sin(phi - self.theta)
 
             #: calculate 2d hists (rotated)
-            minIntTraj_I_rotated = np.min([np.min(self.intTraj_rotated[0][0, :]), np.min(self.intTraj_rotated[1][0, :]), np.min(self.intTraj_rotated[2][0, :]), np.min(self.intTraj_rotated[3][0, :])])
-            maxIntTraj_I_rotated = np.max([np.max(self.intTraj_rotated[0][0, :]), np.max(self.intTraj_rotated[1][0, :]), np.max(self.intTraj_rotated[2][0, :]), np.max(self.intTraj_rotated[3][0, :])])
-            minIntTraj_Q_rotated = np.min([np.min(self.intTraj_rotated[0][1, :]), np.min(self.intTraj_rotated[1][1, :]), np.min(self.intTraj_rotated[2][1, :]), np.min(self.intTraj_rotated[3][1, :])])
-            maxIntTraj_Q_rotated = np.max([np.max(self.intTraj_rotated[0][1, :]), np.max(self.intTraj_rotated[1][1, :]), np.max(self.intTraj_rotated[2][1, :]), np.max(self.intTraj_rotated[3][1, :])])
+            minIntTraj_I_rotated = np.min([np.min(self.intTraj_rotated[0][0, :]), np.min(self.intTraj_rotated[1][0, :])])
+            maxIntTraj_I_rotated = np.max([np.max(self.intTraj_rotated[0][0, :]), np.max(self.intTraj_rotated[1][0, :])])
+            minIntTraj_Q_rotated = np.min([np.min(self.intTraj_rotated[0][1, :]), np.min(self.intTraj_rotated[1][1, :])])
+            maxIntTraj_Q_rotated = np.max([np.max(self.intTraj_rotated[0][1, :]), np.max(self.intTraj_rotated[1][1, :])])
             self.hist2d_gg_rotated, self.binEdges_I_rotated, self.binEdges_Q_rotated = np.histogram2d(self.intTraj_rotated[0][0, :], self.intTraj_rotated[0][1, :], bins=numBins, range=[[minIntTraj_I_rotated, maxIntTraj_I_rotated], [minIntTraj_Q_rotated, maxIntTraj_Q_rotated]])
 
-            intTraj_exc_I_rotated = np.concatenate([self.intTraj_rotated[1][0, :], self.intTraj_rotated[2][0, :], self.intTraj_rotated[3][0, :]])
-            intTraj_exc_Q_rotated = np.concatenate([self.intTraj_rotated[1][1, :], self.intTraj_rotated[2][1, :], self.intTraj_rotated[3][1, :]])
-            self.hist2d_exc_rotated, _ , _ = np.histogram2d(intTraj_exc_I_rotated, intTraj_exc_Q_rotated, bins=numBins, range=[[minIntTraj_I_rotated, maxIntTraj_I_rotated], [minIntTraj_Q_rotated, maxIntTraj_Q_rotated]])
+            # intTraj_exc_I_rotated = np.concatenate([self.intTraj_rotated[1][0, :], self.intTraj_rotated[2][0, :], self.intTraj_rotated[3][0, :]])
+            # intTraj_exc_Q_rotated = np.concatenate([self.intTraj_rotated[1][1, :], self.intTraj_rotated[2][1, :], self.intTraj_rotated[3][1, :]])
+            self.hist2d_exc_rotated, _ , _ = np.histogram2d(self.intTraj_rotated[1][0, :], self.intTraj_rotated[1][1, :], bins=numBins, range=[[minIntTraj_I_rotated, maxIntTraj_I_rotated], [minIntTraj_Q_rotated, maxIntTraj_Q_rotated]])
 
 
             #: plot rotated plots
