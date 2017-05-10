@@ -238,7 +238,25 @@ class NaiveInt(object):
 
 
     def predict(self, traj):
-        print 'needs implementation'
+        numTotalTraj = traj.shape[1]
+        numTimeBins = traj.shape[2]
+
+        #: get intTraj_rotated
+        ###
+
+        intTraj = np.zeros([2, numTotalTraj])  # indices: iqIndex, trajIndex
+        for trajIndex in np.arange(numTotalTraj):
+            intTraj[0, trajIndex] = traj[0, trajIndex, :].mean() / numTimeBins
+            intTraj[1, trajIndex] = traj[1, trajIndex, :].mean() / numTimeBins
+
+        intTraj_rotated = np.zeros([2, numTotalTraj])  # indices: iqIndex, trajIndex
+        mag = np.sqrt(intTraj[0, :] ** 2 + intTraj[1, :] ** 2)  # the magnitude (length) of each IQ vector in I-Q space
+        phi = np.arctan2(intTraj[0, :], intTraj[1, :])  # the phase (i.e. angle) of each IQ vector in IQ space
+        intTraj_rotated[0, :] = mag * np.cos(phi - self.theta)
+        intTraj_rotated[1, :] = mag * np.sin(phi - self.theta)
+
+        predicted_labels_ggexc = np.greater(intTraj_rotated[0, :], self.decBound_ggexc_I * np.ones(numTotalTraj))
+
 
 
 # Not implemented, because unnecessary. The SWInt_SVM classifier is expected to give better classification fidelity than the SWInt_DiffAvgTraj classifier.
