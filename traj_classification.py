@@ -257,6 +257,7 @@ class NaiveInt(object):
 
         predicted_labels_ggexc = np.greater(intTraj_rotated[0, :], self.decBound_ggexc_I * np.ones(numTotalTraj))
 
+        return predicted_labels_ggexc
 
 
 # Not implemented, because unnecessary. The SWInt_SVM classifier is expected to give better classification fidelity than the SWInt_DiffAvgTraj classifier.
