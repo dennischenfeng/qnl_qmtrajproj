@@ -255,7 +255,7 @@ class NaiveInt(object):
         intTraj_rotated[0, :] = mag * np.cos(phi - self.theta)
         intTraj_rotated[1, :] = mag * np.sin(phi - self.theta)
 
-        predicted_labels_ggexc = np.greater(intTraj_rotated[0, :], self.decBound_ggexc_I * np.ones(numTotalTraj))
+        predicted_labels_ggexc = 1 * np.greater(intTraj_rotated[0, :], self.decBound_ggexc_I * np.ones(numTotalTraj))
 
         return predicted_labels_ggexc
 
@@ -283,12 +283,13 @@ class SWInt_SVM(object):
         self.usePCA = usePCA
         self.pca = None
         self.useExtraFeatures = useExtraFeatures
+        self.scaler = None #for processing - to standardize training and test data
 
         validTypeSVMs = ['linear', 'rbf', 'linear_v2']
         if self.typeSVM not in validTypeSVMs:
             print "Error: typeSVM is not valid."
 
-    def __formatIntoFeatureVectorsAndLabels(self, traj, labels, fitNewPCA=False):
+    def __formatIntoFeatureVectorsAndLabels(self, traj, labels, fitNewPCA=False, isTraining=False):
         """
         Helper function. Converts the traj and labels into a feature vector matrix (design matrix) and a labels array, which is the proper format to input into the SVM.
         :param traj: the demodded trajectories in an np array, with 3 indices: iqIndex, trajIndex, timeIndex
@@ -316,8 +317,10 @@ class SWInt_SVM(object):
             inputVectors = np.concatenate((traj_slotted[0, :, :], traj_slotted[1, :, :]), axis=1)  # sample vectors to input into the SVM;
 
         labels_ggexc = np.array([0 if labels[i]==0 else 1 for i in np.arange(numTotalTraj) ]) # this groups gg as label 0, and exc as label 1
-
-        inputVectors = preprocessing.scale(inputVectors)
+        
+        if isTraining:
+            self.scaler = preprocessing.StandardScaler().fit(inputVectors)
+        inputVectors = self.scaler.transform(inputVectors)
 
         if self.usePCA:
             if fitNewPCA:
@@ -380,7 +383,7 @@ class SWInt_SVM(object):
         """
         numTotalTraj = traj.shape[1]
 
-        inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels, fitNewPCA=self.usePCA)
+        inputVectors, labels_ggexc = self.__formatIntoFeatureVectorsAndLabels(traj, labels, fitNewPCA=self.usePCA, isTraining=True)
 
         #: fit the clf_SVM, tune C if chosen to
         ###
@@ -396,7 +399,7 @@ class SWInt_SVM(object):
 
             self.clf_SVM.fit(inputVectors_shuffled, labels_ggexc_shuffled)
         else:
-            #: tune C
+            #: tune C; NOTE: using GridSearchCV is a much cleaner and more elegant method of tuning hyperparams than what I did here (for loop). If have time, rewrite using GridSearchCV.
             print 'Tuning C...'
             lstFid = []
             startIndex_validation = int(numTotalTraj * (1 - validationFraction))
@@ -481,7 +484,7 @@ class SWInt_SVM(object):
 
         fid_ggexc = self.__findFidelity(inputVectors_shuffled, labels_ggexc_shuffled)
 
-        # print 'train fid: ', fid_ggexc
+        print 'train fid: ', fid_ggexc
 
         if suppressPlots == False:
             plt.show()
